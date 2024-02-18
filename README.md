@@ -19,16 +19,17 @@ To begin using the Pedestrian Detector, follow these steps:
 
 1. Open your terminal.
 2. Navigate to the project directory.
-3. Run the following command:
+3. Go to [gui.py](https://github.com/DeepNets-US/Pedestrians-Detector/blob/main/gui.py)
+4. Run the following command:
 
    ```bash
-   python pedestrian_gui.py
+   python gui.py
    ```
 
 ### Option 2: Manual GUI Run
 
 1. Open your preferred Python environment or IDE.
-2. Open the `pedestrian_gui.py` file.
+2. Open the [`gui.py`](https://github.com/DeepNets-US/Pedestrians-Detector/blob/main/gui.py) file.
 3. Run the script.
 
 ## Note
