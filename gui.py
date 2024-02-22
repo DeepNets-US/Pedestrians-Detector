@@ -1,16 +1,14 @@
-# Model Imports
+import cv2
 import torch
 import numpy as np
-from model import load_model
-from torchvision.transforms import ToPILImage
-
-# GUI Imports
 from tkinter import *
 from tkinter import filedialog
-from PIL import Image, ImageTk, ImageDraw
+from PIL import Image, ImageDraw, ImageTk
+import threading
 
 # Model Loading
-model = load_model()
+yolo = cv2.dnn.readNet("yolov3.weights", "yolov3.cfg")
+layer_names = yolo.getUnconnectedOutLayersNames()
 
 # Initialize GUI
 top = Tk()
@@ -19,121 +17,83 @@ top.title("Pedestrian Detection System")
 top.configure(background='#CDCDCD')
 
 # Defining Labels to be displayed
-image_label = Label(top)
-image_label.pack(side="bottom", expand=True)
-
 image_input = Label(top)
+image_input.pack(side="bottom", expand=True)
 
-def show_detected_image(file_path):
-    """
-    Display the image with detected pedestrians using Tkinter.
+# Function to detect pedestrians using YOLOv3
+def detect_pedestrians_yolo(frame):
+    height, width, channels = frame.shape
 
-    Args:
-    - file_path (str): The path to the input image file.
+    # YOLO input pre-processing
+    blob = cv2.dnn.blobFromImage(frame, 0.00392, (416, 416), (0, 0, 0), True, crop=False)
+    yolo.setInput(blob)
+    outs = yolo.forward(layer_names)
 
-    Returns:
-    None
-    """
-    image, predictions = detect_pedestrians(file_path)
-    image = ToPILImage()(image)
-    print(f"Predictions: {predictions}")
+    # Post-process the outputs
+    class_ids = []
+    confidences = []
+    boxes = []
+
+    for out in outs:
+        for detection in out:
+            scores = detection[5:]
+            class_id = np.argmax(scores)
+            confidence = scores[class_id]
+            if confidence > 0.5 and class_id == 0:
+                center_x, center_y, w, h = (detection[0:4] * np.array([width, height, width, height])).astype(int)
+                x, y = int(center_x - w / 2), int(center_y - h / 2)
+                boxes.append([x, y, w, h])
+                confidences.append(float(confidence))
+                class_ids.append(class_id)
+
+    # Apply non-maximum suppression
+    indices = cv2.dnn.NMSBoxes(boxes, confidences, 0.5, 0.4)
 
     # Draw bounding boxes on the image
-    mask = Image.new('L', image.size, color=255)
-    draw = ImageDraw.Draw(mask)
+    for i in indices:
+        box = boxes[i]
+        x, y, w, h = box
+        frame = cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 0), 2)
 
-    for box in predictions['boxes']:
-        box = tuple(map(int, box.cpu().numpy()))
-        draw.rectangle(box, fill=250, outline="red", width=2)
-    image.putalpha(mask)
+    return frame
+
+# Function to display the detected image
+def show_detected_image(file_path):
+    img = cv2.imread(file_path)
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    img = detect_pedestrians_yolo(img)
 
     # Convert the image to PhotoImage
-    img_tk = ImageTk.PhotoImage(image)
+    img = Image.fromarray(img)
+    img_tk = ImageTk.PhotoImage(img)
 
     # Display the image in a Label
-    image_label.configure(image=img_tk)
-    image_label.image = img_tk
+    image_input.configure(image=img_tk)
+    image_input.image = img_tk
 
-def load_image(file_path):
-    """
-    Load and preprocess the image from the file path.
+# Function to process video
+def process_video(video_path):
+    cap = cv2.VideoCapture(video_path)
 
-    Args:
-    - file_path (str): The path to the input image file.
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
 
-    Returns:
-    - list: List containing the preprocessed image as a PyTorch tensor.
-    """
-    img = Image.open(file_path)
-    img = np.array(img)
-    img = np.delete(img, 0, 1)
-    img = img / 255.
-    img = np.transpose(img, (2, 0, 1))  # Change the order to (C, H, W)
+        frame = cv2.resize(frame, (800, 600))
+        frame = detect_pedestrians_yolo(frame)
+        cv2.imshow('Real-Time Detection', frame)
+        cv2.waitKey(1)
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+    cap.release()
+    cv2.destroyAllWindows()
 
-    # Convert NumPy array to PyTorch tensor
-    img = torch.from_numpy(img).float()
-    return [img]
-
-def detect_pedestrians(file_path):
-    """
-    Detect pedestrians in the given image using the pre-trained model.
-
-    Args:
-    - file_path (str): The path to the input image file.
-
-    Returns:
-    - tuple: Tuple containing the original image and the detection predictions.
-    """
-    img = load_image(file_path)
-    with torch.no_grad():
-        predictions = model(img)[0]
-    return img[0], predictions
-
-def show_detect_btn(file_path):
-    """
-    Show the 'Detect Image' button after an image is uploaded.
-
-    Args:
-    - file_path (str): The path to the input image file.
-
-    Returns:
-    None
-    """
-    detect_btn = Button(top, 
-        text="Detect Pedestrians", 
-        command=lambda: show_detected_image(file_path),
-        padx=10, pady=5
-    )
-
-    detect_btn.configure(
-        background="#364156",
-        foreground="white",
-        font=('arial', 10, 'bold')
-    )
-
-    detect_btn.place(relx=0.79, rely=0.46)
-
+# Function to upload an image
 def upload_image():
-    """
-    Open a file dialog to upload an image and display it.
-
-    Args:
-    None
-
-    Returns:
-    None
-    """
     try:
         filepath = filedialog.askopenfilename()
-        uploaded = Image.open(filepath)
-        uploaded.thumbnail((
-            (top.winfo_width()/2.25), (top.winfo_height()/2.25)
-        ))
-
-        image = ImageTk.PhotoImage(uploaded)
-        image_input.configure(image=image)
-        image_input.image = image
-        show_detect_btn(filepath)
+        show_detected_image(filepath)
 
     except Exception as e:
         print("Error:", e)
@@ -143,8 +103,14 @@ upload = Button(top, text="Upload Image", command=upload_image, padx=10, pady=5)
 upload.configure(background="#364156", foreground="white", font=('arial', 10, 'bold'))
 upload.pack(side="bottom", expand=True)
 
-# Visual Setting
-image_input.pack(side="bottom", expand=True)
+# Detecting Pedestrian in Video
+def start_video_processing():
+    video_path = filedialog.askopenfilename()
+    threading.Thread(target=process_video, args=(video_path,), daemon=True).start()
+
+video_btn = Button(top, text="Upload Video", command=start_video_processing, padx=10, pady=5)
+video_btn.configure(background="#364156", foreground="white", font=('arial', 10, 'bold'))
+video_btn.pack(side="bottom", expand=True)
 
 # Set Heading / Title
 heading = Label(top, text="Pedestrian Detection System", pady=20, font=('arial', 20, 'bold'))
