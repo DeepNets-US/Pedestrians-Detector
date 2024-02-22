@@ -10,7 +10,7 @@ Welcome to the Pedestrian Detector project – an intelligent AI application des
 
 To begin using the Pedestrian Detector, follow these steps:
 
-1. Download the model weights file from the provided link: [Download Weights File](https://www.kaggle.com/datasets/utkarshsaxenadn/pedestrians-detector-pytorch).
+1. Download the model weights file from the provided link: [Download Weights File](https://pjreddie.com/media/files/yolov3.weights).
 2. Place the downloaded weights file in the project directory.
 
 ## Running the Pedestrian Detector
