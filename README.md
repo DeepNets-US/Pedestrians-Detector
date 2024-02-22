@@ -1,7 +1,3 @@
-**README.md**
-
-# Pedestrian Detector
-
 ## Overview
 
 Welcome to the Pedestrian Detector project – an intelligent AI application designed to detect pedestrians in images. This project is equipped with a state-of-the-art deep learning model and features a user-friendly Graphical User Interface (GUI) for effortless use.
